@@ -1,0 +1,75 @@
+
+- hosts: all
+  sudo: yes
+  remote_user: vagrant   
+  
+  vars:
+    variRedMail: IREDMAIL_DEBUG='NO' 
+      AUTO_USE_EXISTING_CONFIG_FILE=y 
+      AUTO_INSTALL_WITHOUT_CONFIRM=y 
+      AUTO_CLEANUP_REMOVE_SENDMAIL=y 
+      AUTO_CLEANUP_REMOVE_MOD_PYTHON=y 
+      AUTO_CLEANUP_REPLACE_FIREWALL_RULES=y 
+      AUTO_CLEANUP_RESTART_IPTABLES=y 
+      AUTO_CLEANUP_REPLACE_MYSQL_CONFIG=y 
+      AUTO_CLEANUP_RESTART_POSTFIX=n
+
+  tasks:
+  - name: Update System
+    apt: 
+      update_cache=yes 
+
+  - name: Install bzip2
+    apt: pkg=bzip2 state=present
+
+  - name: Download iRedMail
+    get_url: url=https://bitbucket.org/zhb/iredmail/downloads/iRedMail-0.9.9.tar.bz2 dest=/vagrant
+
+  - name: Extract iRedMail-0.9.9.tar.bz2
+    command: tar xjf /vagrant/iRedMail-0.9.9.tar.bz2
+
+  - name: Replace in hostname vagrant for mati
+    replace: dest=/etc/hostname regexp='vagrant' replace='mati'
+
+  - name: Replace in hosts vagrant.vm for mati.exo-devel.com
+    replace: dest=/etc/hosts regexp='(\s+)vagrant(\s+.*)?$' replace='\1mati\2'
+    replace: dest=/etc/hosts regexp='(\s+)vagrant.vm(\s+.*)?$' replace='\1mati.exo-devel.com\2'
+
+  - lineinfile: dest=/etc/hosts line='192.168.56.102 mati.exo-devel.com' state=present 
+
+  - name: Install config for iRedMail
+    template:
+      src: config.j2
+      dest: "iRedMail-0.9.9/config"
+
+  - name: Give permission to file iRedMail.sh
+    file:
+      path: "iRedMail-0.9.9/iRedMail.sh"
+      mode: 0700
+
+  - name: Install iRedMail
+    shell: " {{ variRedMail }} bash iRedMail.sh"
+    args:
+      chdir: "iRedMail-0.9.9"
+ 
+  
+  - name: restart stack
+    systemd:
+      name: "{{ item }}"
+      state: restarted
+    with_items:
+      - postfix 
+      - postgresql 
+      - nginx 
+      - uwsgi 
+      - dovecot 
+      - clamav-daemon 
+      - amavis 
+      - clamav-freshclam 
+      - sogo 
+      - memcached 
+
+  - name: restart iredapd
+    systemd:
+      name: iredapd
+      state: restarted
